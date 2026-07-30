@@ -1,0 +1,16 @@
+services:
+  currency-exchange-api:
+    build: .
+
+    container_name: currency-exchange-api
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - sqlite_data:/app/data
+
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:

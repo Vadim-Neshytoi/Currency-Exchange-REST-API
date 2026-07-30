@@ -1,0 +1,13 @@
+.venv
+.idea
+.git
+.gitignore
+
+__pycache__
+*.pyc
+
+server_app.log
+
+data
+
+README.md

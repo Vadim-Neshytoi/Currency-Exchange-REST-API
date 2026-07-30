@@ -12,9 +12,10 @@ import logging
 
 server = ("", 8000)
 httpd = HTTPServer(server, SimpleHandler)
-
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "currency_exchange.db"
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR/ "currency_exchange.db"
 database_manager = DatabaseManager(db_path=DB_PATH)
 database_manager.connect()
 database_manager.initialize_tables()
