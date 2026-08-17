@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+import threading
 import sqlite3
 from decimal import Decimal
 from model.currency import Currency
@@ -17,28 +18,51 @@ class DatabaseManager:
        Является промежуточным звеном между контроллерами и базой данных."""
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = db_path
-        self._connection = None
-        self._cursor = None
+        self._local = threading.local()
 
     def connect(self) -> None:
-        self._connection = sqlite3.connect(self._db_path)
-        self._cursor = self._connection.cursor()
-        self._cursor.execute("PRAGMA foreign_keys = ON;")
+        connection = sqlite3.connect(self._db_path, timeout=5)
+        connection.execute("PRAGMA foreign_keys = ON;")
+        self._local.connection = connection
+        self._local.cursor = connection.cursor()
+
+    def _get_connection(self) -> sqlite3.Connection:
+        if not hasattr(self._local, "connection"):
+            connection = sqlite3.connect(self._db_path, timeout=5)
+            connection.execute("PRAGMA foreign_keys = ON;")
+            self._local.connection = connection
+        return self._local.connection
+
+    def _get_cursor(self) -> sqlite3.Cursor:
+        if not hasattr(self._local, "cursor"):
+            self._local.cursor = self._get_connection().cursor()
+        return self._local.cursor
+
+    def _get_lastrowid(self) -> int:
+        return self._get_cursor().lastrowid
 
     def execute_query(self, query: str, params: tuple = ()) -> list:
+        connection = self._get_connection()
+        cursor = self._get_cursor()
         try:
-            self._cursor.execute(query, params)
-            self._connection.commit()
-        except Exception as e:
-            self._connection.rollback()
-            raise e
-        return self._cursor.fetchall()
+            cursor.execute(query, params)
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        return cursor.fetchall()
 
     def close_connection(self) -> None:
-        if self._cursor:
-            self._cursor.close()
-        if self._connection:
-            self._connection.close()
+        cursor = getattr(self._local, "cursor", None)
+        connection = getattr(self._local, "connection", None)
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+        if hasattr(self._local, "cursor"):
+            del self._local.cursor
+        if hasattr(self._local, "connection"):
+            del self._local.connection
 
     def initialize_tables(self) -> None:
         self.execute_query("""CREATE TABLE IF NOT EXISTS currencies (
@@ -63,7 +87,7 @@ class DatabaseManager:
     def insert_currency(self, currency_obj: Currency) -> Currency:
         query = "INSERT INTO currencies (code, name, sign) VALUES (?, ?, ?)"
         self.execute_query(query, (currency_obj.code, currency_obj.name, currency_obj.sign))
-        generated_id = self._cursor.lastrowid
+        generated_id = self._get_lastrowid()
         currency_obj.id = generated_id
         return currency_obj
 
@@ -95,7 +119,7 @@ class DatabaseManager:
         target_currency_id = exchange_rate_obj.target_currency.id
         query = "INSERT INTO exchange_rates (base_currency_id, target_currency_id, rate) VALUES (?, ?, ?)"
         self.execute_query(query, (base_currency_id, target_currency_id, exchange_rate_obj.rate))
-        generated_id = self._cursor.lastrowid
+        generated_id = self._get_lastrowid()
         exchange_rate_obj.id = generated_id
         return exchange_rate_obj
 

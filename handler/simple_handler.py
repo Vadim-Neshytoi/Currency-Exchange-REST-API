@@ -1,5 +1,7 @@
 import re
 import json
+from typing import cast
+from server.application_server import ApplicationServer
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import logging
@@ -13,6 +15,13 @@ class SimpleHandler(BaseHTTPRequestHandler):
        (парсинг запросов, получение параметров, сериализация JSON, преобразование исключений в HTTP-коды)"""
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+
+    def finish(self) -> None:
+        try:
+            super().finish()
+        finally:
+            server = cast(ApplicationServer, self.server)
+            server.database_manager.close_connection()
 
     def send_json_response(self, status_code: int, data: dict | list) -> None:
         self.send_response(status_code)
@@ -36,6 +45,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.validate_currency_code(target_currency_code)
 
     def do_GET(self) -> None:
+        server = cast(ApplicationServer, self.server)
         try:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
@@ -44,7 +54,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 data = {"message": "Главная страница"}
                 self.send_json_response(200, data)
             elif path == "/currencies":
-                currencies = self.server.currency_controller.get_all_currencies()
+                currencies = server.currency_controller.get_all_currencies()
                 currencies_list = []
                 for currency in currencies:
                     currency_dict = currency.to_dict()
@@ -61,7 +71,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        currency = self.server.currency_controller.get_currency_by_code(currency_code)
+                        currency = server.currency_controller.get_currency_by_code(currency_code)
                     except CurrencyNotFoundError:
                         data = {"message": f"Валюта '{currency_code}' не найдена"}
                         self.send_json_response(404, data)
@@ -72,7 +82,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 data = {"message": "Неверный запрос"}
                 self.send_json_response(400, data)
             elif path == "/exchangeRates":
-                exchange_rates = self.server.exchange_rate_controller.get_all_exchange_rates()
+                exchange_rates = server.exchange_rate_controller.get_all_exchange_rates()
                 exchange_rates_list = []
                 for exchange_rate in exchange_rates:
                     exchange_rate_dict = exchange_rate.to_dict()
@@ -89,7 +99,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                     self.send_json_response(400, data)
                     return
                 try:
-                    exchange_rate = self.server.exchange_rate_controller.get_exchange_rate_by_codes(base_currency_code, target_currency_code)
+                    exchange_rate = server.exchange_rate_controller.get_exchange_rate_by_codes(base_currency_code, target_currency_code)
                 except ExchangeRateNotFoundError:
                     data = {"message": f"Обменный курс {base_currency_code}/{target_currency_code} не найден"}
                     self.send_json_response(404, data)
@@ -109,7 +119,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        exchange_result_obj = self.server.exchange_rate_controller.exchange(base_currency_code=query_params["from"][0],
+                        exchange_result_obj = server.exchange_rate_controller.exchange(base_currency_code=query_params["from"][0],
                                                                              target_currency_code=query_params["to"][0],
                                                                              amount=query_params["amount"][0])
                     except InvalidAmountError:
@@ -149,6 +159,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
 
     def do_POST(self) -> None:
+        server = cast(ApplicationServer, self.server)
         try:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
@@ -167,7 +178,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        created_currency = self.server.currency_controller.create_currency(code=params["code"][0],
+                        created_currency = server.currency_controller.create_currency(code=params["code"][0],
                                                                               name=params["name"][0],
                                                                               sign=params["sign"][0])
                     except InvalidSignError:
@@ -205,7 +216,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        created_exchange_rate = self.server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0],
+                        created_exchange_rate = server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0],
                                                                                                       code_2=params["targetCurrencyCode"][0],
                                                                                                       rate=params["rate"][0])
                     except InvalidRateError:
@@ -235,6 +246,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.send_json_response(500, data)
 
     def do_PATCH(self) -> None:
+        server = cast(ApplicationServer, self.server)
         try:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
@@ -256,7 +268,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         return
                     new_rate = params.get("rate")[0]
                     try:
-                        exchange_rate_obj = self.server.exchange_rate_controller.update_exchange_rate(base_currency_code,
+                        exchange_rate_obj = server.exchange_rate_controller.update_exchange_rate(base_currency_code,
                                                                                                         target_currency_code, new_rate)
                     except InvalidRateError:
                         data = {"message": f"Недопустимое значение параметра rate:{new_rate}"}
