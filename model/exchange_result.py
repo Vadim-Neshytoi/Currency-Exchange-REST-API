@@ -56,14 +56,18 @@ class ExchangeResult:
 
     @amount.setter
     def amount(self, amount: str | float) -> None:
+        self.validate_amount(amount)
+        self._amount = Decimal(str(amount))
+
+    @staticmethod
+    def validate_amount(amount: str | float) -> None:
         try:
             text_amount = str(amount)
-            if text_amount.startswith('+'):
+            if text_amount.startswith("+"):
                 raise InvalidAmountError()
             decimal_amount = Decimal(text_amount)
             if decimal_amount < 0:
                 raise InvalidAmountError()
-            self._amount = decimal_amount
         except InvalidOperation:
             raise InvalidAmountError()
 

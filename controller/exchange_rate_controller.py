@@ -47,6 +47,7 @@ class ExchangeRateController:
 
 
     def exchange(self, base_currency_code: str, target_currency_code: str, amount: str) -> ExchangeResult:
+        ExchangeResult.validate_amount(amount)
         base_currency_obj = self._database_manager.find_currency_by_code(base_currency_code)
         target_currency_obj = self._database_manager.find_currency_by_code(target_currency_code)
         if base_currency_obj is None or target_currency_obj is None:
