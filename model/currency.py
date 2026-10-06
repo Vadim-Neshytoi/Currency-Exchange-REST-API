@@ -21,7 +21,7 @@ class Currency:
         if self._id is None:
             self._id = ID
         else:
-            raise ImmutableAttributeError
+            raise ImmutableAttributeError()
 
     @property
     def code(self) -> str:

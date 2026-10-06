@@ -3,10 +3,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from database.database_manager import DatabaseManager
 
+from decimal import Decimal
 from model.exchange_rate import ExchangeRate
 from model.exchange_result import ExchangeResult
 from sqlite3 import IntegrityError
-from exceptions.exchange_rate_exceptions import ExchangeRateAlreadyExistsError, ExchangeRateNotFoundError
+from exceptions.exchange_rate_exceptions import (ExchangeRateAlreadyExistsError, ExchangeRateNotFoundError,
+                                                 SameCurrencyExchangeRateError, CrossCurrencyOverlapError)
 from exceptions.currency_exceptions import CurrencyNotFoundError
 
 
@@ -17,6 +19,8 @@ class ExchangeRateController:
         self._database_manager = database_manager
 
     def create_exchange_rate(self, code_1: str, code_2: str, rate: str) -> ExchangeRate:
+        if code_1 == code_2:
+            raise SameCurrencyExchangeRateError()
         currency_obj_1 = self._database_manager.find_currency_by_code(code_1)
         currency_obj_2 = self._database_manager.find_currency_by_code(code_2)
         if currency_obj_1 is None or currency_obj_2 is None:
@@ -46,31 +50,46 @@ class ExchangeRateController:
         return self._database_manager.update_exchange_rate(exchange_rate_obj)
 
 
-    def exchange(self, base_currency_code: str, target_currency_code: str, amount: str) -> ExchangeResult:
+    def exchange(self, base_currency_code: str, target_currency_code: str, amount: str,
+                 intermediate_currency_code: str ="USD") -> ExchangeResult:
         ExchangeResult.validate_amount(amount)
         base_currency_obj = self._database_manager.find_currency_by_code(base_currency_code)
         target_currency_obj = self._database_manager.find_currency_by_code(target_currency_code)
         if base_currency_obj is None or target_currency_obj is None:
             raise CurrencyNotFoundError()
+        if base_currency_code == target_currency_code:
+            rate = Decimal("1")
+            return ExchangeResult(base_currency=base_currency_obj,
+                                  target_currency=target_currency_obj,
+                                  rate=rate,
+                                  amount=amount)
         direct_exchange_rate_obj = self._database_manager.find_exchange_rate(base_currency_code, target_currency_code)
         if direct_exchange_rate_obj:
             rate = direct_exchange_rate_obj.rate
-            return ExchangeResult(base_currency=base_currency_obj, target_currency=target_currency_obj, rate=rate,
-                              amount=amount)
+            return ExchangeResult(base_currency=direct_exchange_rate_obj.base_currency,
+                                  target_currency=direct_exchange_rate_obj.target_currency,
+                                  rate=rate,
+                                  amount=amount)
         reverse_exchange_rate_obj = self._database_manager.find_exchange_rate(target_currency_code, base_currency_code)
         if reverse_exchange_rate_obj:
             reverse_rate = reverse_exchange_rate_obj.rate
             rate = 1 / reverse_rate
-            return ExchangeResult(base_currency=base_currency_obj, target_currency=target_currency_obj, rate=rate,
-                              amount=amount)
-        usd_exchange_rate_obj_1 = self._database_manager.find_exchange_rate("USD", base_currency_code)
-        usd_exchange_rate_obj_2 = self._database_manager.find_exchange_rate("USD", target_currency_code)
-        if usd_exchange_rate_obj_1 and usd_exchange_rate_obj_2:
-            rate_1 = usd_exchange_rate_obj_1.rate
-            rate_2 = usd_exchange_rate_obj_2.rate
+            return ExchangeResult(base_currency=base_currency_obj,
+                                  target_currency=target_currency_obj,
+                                  rate=rate,
+                                  amount=amount)
+        if intermediate_currency_code == base_currency_code or intermediate_currency_code == target_currency_code:
+            raise CrossCurrencyOverlapError()
+        intermediate_exchange_rate_obj_1 = self._database_manager.find_exchange_rate(intermediate_currency_code, base_currency_code)
+        intermediate_exchange_rate_obj_2 = self._database_manager.find_exchange_rate(intermediate_currency_code, target_currency_code)
+        if intermediate_exchange_rate_obj_1 and intermediate_exchange_rate_obj_2:
+            rate_1 = intermediate_exchange_rate_obj_1.rate
+            rate_2 = intermediate_exchange_rate_obj_2.rate
             rate = rate_2 / rate_1
-            return ExchangeResult(base_currency=base_currency_obj, target_currency=target_currency_obj, rate=rate,
-                              amount=amount)
+            return ExchangeResult(base_currency=base_currency_obj,
+                                  target_currency=target_currency_obj,
+                                  rate=rate,
+                                  amount=amount)
         raise ExchangeRateNotFoundError()
 
 

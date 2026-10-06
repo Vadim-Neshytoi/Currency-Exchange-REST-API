@@ -4,7 +4,7 @@ if TYPE_CHECKING:
     from database.database_manager import DatabaseManager
 
 from model.currency import Currency
-from sqlite3 import IntegrityError
+import sqlite3
 from exceptions.currency_exceptions import CurrencyAlreadyExistsError, CurrencyNotFoundError
 
 
@@ -28,9 +28,11 @@ class CurrencyController:
         try:
             currency_obj = Currency(code=code, name=name, sign=sign)
             return self._database_manager.insert_currency(currency_obj)
-        except IntegrityError:
-            raise CurrencyAlreadyExistsError()
-
+        except sqlite3.IntegrityError as e:
+            error_msg = str(e)
+            if "UNIQUE constraint failed: currencies.code" in error_msg:
+                raise CurrencyAlreadyExistsError() from e
+            raise
 
 
 

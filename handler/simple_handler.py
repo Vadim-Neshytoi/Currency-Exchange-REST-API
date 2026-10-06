@@ -119,8 +119,8 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        exchange_result_obj = server.exchange_rate_controller.exchange(base_currency_code=query_params["from"][0],
-                                                                             target_currency_code=query_params["to"][0],
+                        exchange_result_obj = server.exchange_rate_controller.exchange(base_currency_code=currency_pair_from.strip().upper(),
+                                                                             target_currency_code=currency_pair_to.strip().upper(),
                                                                              amount=query_params["amount"][0])
                     except InvalidAmountError:
                         data = {"message": f"Недопустимое значение параметра amount:{query_params["amount"][0]}"}
@@ -216,8 +216,8 @@ class SimpleHandler(BaseHTTPRequestHandler):
                         self.send_json_response(400, data)
                         return
                     try:
-                        created_exchange_rate = server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0],
-                                                                                                      code_2=params["targetCurrencyCode"][0],
+                        created_exchange_rate = server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0].strip().upper(),
+                                                                                                      code_2=params["targetCurrencyCode"][0].strip().upper(),
                                                                                                       rate=params["rate"][0])
                     except InvalidRateError:
                         data = {"message": f"Недопустимое значение параметра rate:{params["rate"][0]}"}

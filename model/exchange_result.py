@@ -55,12 +55,12 @@ class ExchangeResult:
         return self._amount
 
     @amount.setter
-    def amount(self, amount: str | float) -> None:
+    def amount(self, amount: str) -> None:
         self.validate_amount(amount)
         self._amount = Decimal(str(amount))
 
     @staticmethod
-    def validate_amount(amount: str | float) -> None:
+    def validate_amount(amount: str) -> None:
         try:
             text_amount = str(amount)
             if text_amount.startswith("+"):
@@ -76,13 +76,13 @@ class ExchangeResult:
         return self._converted_amount
 
     def to_dict(self) -> dict:
-            return {
-                "baseCurrency": self.base_currency.to_dict(),
-                "targetCurrency": self.target_currency.to_dict(),
-                "rate": self.rate,
-                "amount": self.amount,
-                "convertedAmount": self.converted_amount
-            }
+        return {
+            "baseCurrency": self.base_currency.to_dict(),
+            "targetCurrency": self.target_currency.to_dict(),
+            "rate": self.rate,
+            "amount": self.amount,
+            "convertedAmount": self.converted_amount
+        }
 
 
 

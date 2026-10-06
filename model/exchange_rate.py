@@ -10,7 +10,7 @@ from exceptions.validation_exceptions import InvalidRateError, ImmutableAttribut
 class ExchangeRate:
     """Класс предметной области, представляющий обменный курс между двумя валютами.
        Используется для хранения данных и их последующей передачи в HTTP-ответе."""
-    def __init__(self, base_currency: Currency, target_currency: Currency, rate: str | float, ID: int | None =None) -> None:
+    def __init__(self, base_currency: Currency, target_currency: Currency, rate: str, ID: int | None =None) -> None:
         self._id = ID
         self.base_currency = base_currency
         self.target_currency = target_currency
@@ -25,7 +25,7 @@ class ExchangeRate:
         if self._id is None:
             self._id = ID
         else:
-            raise ImmutableAttributeError
+            raise ImmutableAttributeError()
 
     @property
     def base_currency(self) -> Currency:
@@ -48,7 +48,7 @@ class ExchangeRate:
         return self._rate
 
     @rate.setter
-    def rate(self, new_rate: str | float) -> None:
+    def rate(self, new_rate: str ) -> None:
         try:
             text_new_rate = str(new_rate)
             if text_new_rate.startswith('+'):
@@ -62,9 +62,9 @@ class ExchangeRate:
 
 
     def to_dict(self) -> dict:
-            return {
-                "id": self.id,
-                "baseCurrency": self.base_currency.to_dict(),
-                "targetCurrency": self.target_currency.to_dict(),
-                "rate": self.rate
-            }
+        return {
+            "id": self.id,
+            "baseCurrency": self.base_currency.to_dict(),
+            "targetCurrency": self.target_currency.to_dict(),
+            "rate": self.rate
+        }

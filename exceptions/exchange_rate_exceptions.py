@@ -10,3 +10,9 @@ class ExchangeRateAlreadyExistsError(CurrencyExchangeError):
 
 class ExchangeRateNotFoundError(CurrencyExchangeError):
     pass
+
+class SameCurrencyExchangeRateError(CurrencyExchangeError):
+    pass
+
+class CrossCurrencyOverlapError(CurrencyExchangeError):
+    pass
