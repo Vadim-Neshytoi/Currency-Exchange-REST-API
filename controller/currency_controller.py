@@ -15,6 +15,7 @@ class CurrencyController:
         self._database_manager = database_manager
 
     def get_currency_by_code(self, code_to_find: str) -> Currency:
+        code_to_find = Currency.normalize_code(code_to_find)
         currency = self._database_manager.find_currency_by_code(code_to_find)
         if currency is None:
             raise CurrencyNotFoundError()
@@ -25,6 +26,7 @@ class CurrencyController:
         return currencies
 
     def create_currency(self, code: str, name: str, sign: str) -> Currency:
+        code = Currency.normalize_code(code)
         try:
             currency_obj = Currency(code=code, name=name, sign=sign)
             return self._database_manager.insert_currency(currency_obj)

@@ -12,10 +12,16 @@ class InvalidAmountError(CurrencyExchangeError):
     pass
 
 class InvalidCodeError(CurrencyExchangeError):
-    pass
+    def __init__(self, invalid_code: str):
+        self.invalid_code = invalid_code
+        super().__init__(invalid_code)
 
 class InvalidSignError(CurrencyExchangeError):
     pass
 
 class ImmutableAttributeError(CurrencyExchangeError):
     pass
+
+class InvalidNameError(CurrencyExchangeError):
+    pass
+

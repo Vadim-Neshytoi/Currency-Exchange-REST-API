@@ -1,5 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
+from model.currency import Currency
+
 if TYPE_CHECKING:
     from database.database_manager import DatabaseManager
 
@@ -19,6 +22,8 @@ class ExchangeRateController:
         self._database_manager = database_manager
 
     def create_exchange_rate(self, code_1: str, code_2: str, rate: str) -> ExchangeRate:
+        code_1 = Currency.normalize_code(code_1)
+        code_2 = Currency.normalize_code(code_2)
         if code_1 == code_2:
             raise SameCurrencyExchangeRateError()
         currency_obj_1 = self._database_manager.find_currency_by_code(code_1)
@@ -33,6 +38,8 @@ class ExchangeRateController:
 
 
     def get_exchange_rate_by_codes(self, code_1: str, code_2: str) -> ExchangeRate:
+        code_1 = Currency.normalize_code(code_1)
+        code_2 = Currency.normalize_code(code_2)
         exchange_rate_obj = self._database_manager.find_exchange_rate(code_1, code_2)
         if exchange_rate_obj is None:
             raise ExchangeRateNotFoundError()
@@ -43,6 +50,8 @@ class ExchangeRateController:
         return exchange_rate_obj
 
     def update_exchange_rate(self, code_1: str, code_2: str, new_rate: str) -> ExchangeRate:
+        code_1 = Currency.normalize_code(code_1)
+        code_2 = Currency.normalize_code(code_2)
         exchange_rate_obj = self._database_manager.find_exchange_rate(code_1, code_2)
         if exchange_rate_obj is None:
             raise ExchangeRateNotFoundError()
@@ -52,6 +61,9 @@ class ExchangeRateController:
 
     def exchange(self, base_currency_code: str, target_currency_code: str, amount: str,
                  intermediate_currency_code: str ="USD") -> ExchangeResult:
+        base_currency_code = Currency.normalize_code(base_currency_code)
+        target_currency_code = Currency.normalize_code(target_currency_code)
+        intermediate_currency_code = Currency.normalize_code(intermediate_currency_code)
         ExchangeResult.validate_amount(amount)
         base_currency_obj = self._database_manager.find_currency_by_code(base_currency_code)
         target_currency_obj = self._database_manager.find_currency_by_code(target_currency_code)

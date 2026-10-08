@@ -1,5 +1,4 @@
-import re
-import json
+import simplejson as json
 from typing import cast
 from server.application_server import ApplicationServer
 from http.server import BaseHTTPRequestHandler
@@ -8,11 +7,15 @@ import logging
 from exceptions.currency_exceptions import CurrencyNotFoundError, CurrencyAlreadyExistsError
 from exceptions.exchange_rate_exceptions import ExchangeRateNotFoundError, ExchangeRateAlreadyExistsError
 from exceptions.validation_exceptions import InvalidAmountError, InvalidRateError, InvalidCodeError, InvalidSignError
+from settings import AppSecurityConfig
 
 
 class SimpleHandler(BaseHTTPRequestHandler):
     """Обработчик HTTP запросов, который занимается исключительно HTTP-уровнем
        (парсинг запросов, получение параметров, сериализация JSON, преобразование исключений в HTTP-коды)"""
+
+    security_config: AppSecurityConfig
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -28,21 +31,39 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.send_header("Content-type", "application/json; charset=utf-8")
         self.send_cors_headers()
         self.end_headers()
-        self.wfile.write(json.dumps(data, ensure_ascii=False, default=float).encode("utf-8"))
+        self.wfile.write(json.dumps(data, ensure_ascii=False, use_decimal=True).encode("utf-8"))
+
+    def _verify_body_size(self) -> bool:
+        content_length_str = self.headers.get('Content-Length')
+        if not content_length_str:
+            data = {"message": "Missing Content-Length header."}
+            self.send_json_response(411, data)
+            return False
+        try:
+            content_length = int(content_length_str)
+        except ValueError:
+            data = {"message": "Invalid Content-Length header."}
+            self.send_json_response(400, data)
+            return False
+        if content_length < 0:
+            data = {"message": "Invalid Content-Length header."}
+            self.send_json_response(400, data)
+            return False
+        if content_length > self.security_config.max_body_size:
+            data = {"message": "Request body is too large."}
+            self.send_json_response(413, data)
+            return False
+        return True
 
     def send_cors_headers(self) -> None:
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
+        client_origin = self.headers.get('Origin')
+        if client_origin in self.security_config.cors_allowed_origins:
+            self.send_header('Access-Control-Allow-Origin', client_origin)
+        else:
+            pass
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PATCH')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
 
-    @staticmethod
-    def validate_currency_code(currency_code: str) -> None:
-        if len(currency_code) != 3 or not re.match(r"^[a-zA-Z]+$", currency_code):
-            raise InvalidCodeError()
-
-    def validate_currency_pair(self, base_currency_code: str, target_currency_code: str) -> None:
-        self.validate_currency_code(base_currency_code)
-        self.validate_currency_code(target_currency_code)
 
     def do_GET(self) -> None:
         server = cast(ApplicationServer, self.server)
@@ -65,13 +86,11 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 currency_code = path[len("/currency/"):]
                 if currency_code:
                     try:
-                        self.validate_currency_code(currency_code)
-                    except InvalidCodeError:
-                        data = {"message": "Неверный запрос"}
+                        currency = server.currency_controller.get_currency_by_code(currency_code)
+                    except InvalidCodeError as e:
+                        data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
                         self.send_json_response(400, data)
                         return
-                    try:
-                        currency = server.currency_controller.get_currency_by_code(currency_code)
                     except CurrencyNotFoundError:
                         data = {"message": f"Валюта '{currency_code}' не найдена"}
                         self.send_json_response(404, data)
@@ -93,13 +112,12 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 base_currency_code = currency_pair[:3]
                 target_currency_code = currency_pair[3:]
                 try:
-                    self.validate_currency_pair(base_currency_code, target_currency_code)
-                except InvalidCodeError:
-                    data = {"message": "Неверный запрос"}
+                    exchange_rate = server.exchange_rate_controller.get_exchange_rate_by_codes(base_currency_code,
+                                                                                               target_currency_code)
+                except InvalidCodeError as e:
+                    data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
                     self.send_json_response(400, data)
                     return
-                try:
-                    exchange_rate = server.exchange_rate_controller.get_exchange_rate_by_codes(base_currency_code, target_currency_code)
                 except ExchangeRateNotFoundError:
                     data = {"message": f"Обменный курс {base_currency_code}/{target_currency_code} не найден"}
                     self.send_json_response(404, data)
@@ -113,15 +131,13 @@ class SimpleHandler(BaseHTTPRequestHandler):
                     currency_pair_from = query_params['from'][0]
                     currency_pair_to = query_params['to'][0]
                     try:
-                        self.validate_currency_pair(currency_pair_from, currency_pair_to)
-                    except InvalidCodeError:
-                        data = {"message": "Неверный запрос"}
+                        exchange_result_obj = server.exchange_rate_controller.exchange(base_currency_code=currency_pair_from,
+                                                                             target_currency_code=currency_pair_to,
+                                                                             amount=query_params["amount"][0])
+                    except InvalidCodeError as e:
+                        data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
                         self.send_json_response(400, data)
                         return
-                    try:
-                        exchange_result_obj = server.exchange_rate_controller.exchange(base_currency_code=currency_pair_from.strip().upper(),
-                                                                             target_currency_code=currency_pair_to.strip().upper(),
-                                                                             amount=query_params["amount"][0])
                     except InvalidAmountError:
                         data = {"message": f"Недопустимое значение параметра amount:{query_params["amount"][0]}"}
                         self.send_json_response(400, data)
@@ -159,6 +175,8 @@ class SimpleHandler(BaseHTTPRequestHandler):
 
 
     def do_POST(self) -> None:
+        if not self._verify_body_size():
+            return
         server = cast(ApplicationServer, self.server)
         try:
             parsed_url = urlparse(self.path)
@@ -170,23 +188,16 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 required_fields = ["name", "code", "sign"]
                 missing_fields = self.find_missing_fields(params, required_fields)
                 if not missing_fields:
-                    currency_code = params["code"][0]
-                    try:
-                        self.validate_currency_code(currency_code)
-                    except InvalidCodeError:
-                        data = {"message": f"Недопустимое значение параметра code:{params["code"][0]}"}
-                        self.send_json_response(400, data)
-                        return
                     try:
                         created_currency = server.currency_controller.create_currency(code=params["code"][0],
                                                                               name=params["name"][0],
                                                                               sign=params["sign"][0])
-                    except InvalidSignError:
-                        data = {"message": f"Недопустимое значение параметра sign:{params["sign"][0]}"}
+                    except InvalidCodeError as e:
+                        data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
                         self.send_json_response(400, data)
                         return
-                    except InvalidCodeError:
-                        data = {"message": f"Недопустимое значение параметра code:{params["code"][0]}"}
+                    except InvalidSignError:
+                        data = {"message": f"Недопустимое значение параметра sign:{params["sign"][0]}"}
                         self.send_json_response(400, data)
                         return
                     except CurrencyAlreadyExistsError:
@@ -203,22 +214,17 @@ class SimpleHandler(BaseHTTPRequestHandler):
                 content_length = int(self.headers['Content-Length'])
                 post_data = self.rfile.read(content_length)
                 params = parse_qs(post_data.decode("utf-8"))
-                print(params)
                 required_fields = ["baseCurrencyCode", "targetCurrencyCode", "rate"]
                 missing_fields = self.find_missing_fields(params, required_fields)
                 if not missing_fields:
-                    base_currency_code = params["baseCurrencyCode"][0]
-                    target_currency_code = params["targetCurrencyCode"][0]
                     try:
-                        self.validate_currency_pair(base_currency_code, target_currency_code)
-                    except InvalidCodeError:
-                        data = {"message": "Неверный запрос"}
+                        created_exchange_rate = server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0],
+                                                                                                      code_2=params["targetCurrencyCode"][0],
+                                                                                                      rate=params["rate"][0])
+                    except InvalidCodeError as e:
+                        data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
                         self.send_json_response(400, data)
                         return
-                    try:
-                        created_exchange_rate = server.exchange_rate_controller.create_exchange_rate(code_1=params["baseCurrencyCode"][0].strip().upper(),
-                                                                                                      code_2=params["targetCurrencyCode"][0].strip().upper(),
-                                                                                                      rate=params["rate"][0])
                     except InvalidRateError:
                         data = {"message": f"Недопустимое значение параметра rate:{params["rate"][0]}"}
                         self.send_json_response(400, data)
@@ -246,6 +252,8 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.send_json_response(500, data)
 
     def do_PATCH(self) -> None:
+        if not self._verify_body_size():
+            return
         server = cast(ApplicationServer, self.server)
         try:
             parsed_url = urlparse(self.path)
@@ -260,16 +268,15 @@ class SimpleHandler(BaseHTTPRequestHandler):
                     currency_pair = path[len("/exchangeRate/"):]
                     base_currency_code = currency_pair[:3]
                     target_currency_code = currency_pair[3:]
-                    try:
-                        self.validate_currency_pair(base_currency_code, target_currency_code)
-                    except InvalidCodeError:
-                        data = {"message": "Неверный запрос"}
-                        self.send_json_response(400, data)
-                        return
                     new_rate = params.get("rate")[0]
                     try:
                         exchange_rate_obj = server.exchange_rate_controller.update_exchange_rate(base_currency_code,
-                                                                                                        target_currency_code, new_rate)
+                                                                                                 target_currency_code,
+                                                                                                 new_rate)
+                    except InvalidCodeError as e:
+                        data = {"message": f"Невалидное Значение кода {e.invalid_code}"}
+                        self.send_json_response(400, data)
+                        return
                     except InvalidRateError:
                         data = {"message": f"Недопустимое значение параметра rate:{new_rate}"}
                         self.send_json_response(400, data)

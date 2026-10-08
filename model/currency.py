@@ -1,16 +1,26 @@
-from exceptions.validation_exceptions import InvalidCodeError, InvalidSignError, ImmutableAttributeError
+from exceptions.validation_exceptions import InvalidCodeError, InvalidSignError, ImmutableAttributeError, \
+    InvalidNameError
 import re
 
 
 class Currency:
     """Класс предметной области, представляющий валюту.
        Используется для хранения данных и их последующей передачи в HTTP-ответе."""
+
+    CODE_PATTERN = re.compile(r"^[A-Z]{3}$")
+
     def __init__(self, code: str, name: str, sign: str, ID: int | None = None)->None:
         self._id = ID
         self.code = code
         self.name = name
         self.sign = sign
 
+    @classmethod
+    def normalize_code(cls, code: str) -> str:
+        normalized = code.upper()
+        if not cls.CODE_PATTERN.fullmatch(normalized):
+            raise InvalidCodeError(code)
+        return normalized
 
     @property
     def id(self) -> int | None:
@@ -29,9 +39,8 @@ class Currency:
 
     @code.setter
     def code(self, code: str) -> None:
-        if len(code) != 3 or not re.match(r"^[a-zA-Z]+$", code):
-            raise InvalidCodeError()
-        self._code = code.upper()
+        normalized_code = self.normalized_code(code)
+        self._code = normalized_code
 
     @property
     def name(self) -> str:
@@ -39,6 +48,8 @@ class Currency:
 
     @name.setter
     def name(self, name: str) -> None:
+        if name.strip() == "":
+            raise InvalidNameError()
         self._name = name
 
 
@@ -48,7 +59,7 @@ class Currency:
 
     @sign.setter
     def sign(self, sign: str) -> None:
-        if len(sign) > 3:
+        if sign.strip() == "" or len(sign) > 3:
             raise InvalidSignError()
         self._sign = sign
 

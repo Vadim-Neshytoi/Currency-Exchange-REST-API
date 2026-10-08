@@ -12,6 +12,7 @@ from settings import Settings
 def create_application(settings: Settings):
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     settings.log_path.parent.mkdir(parents=True, exist_ok=True)
+    SimpleHandler.security_config = settings.security
     database_manager = DatabaseManager(db_path=settings.db_path)
     database_manager.connect()
     database_manager.initialize_tables()
