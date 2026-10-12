@@ -25,7 +25,7 @@ class ExchangeRate:
         if self._id is None:
             self._id = ID
         else:
-            raise ImmutableAttributeError()
+            raise ImmutableAttributeError(ID)
 
     @property
     def base_currency(self) -> Currency:
@@ -52,13 +52,13 @@ class ExchangeRate:
         try:
             text_new_rate = str(new_rate)
             if text_new_rate.startswith('+'):
-                raise InvalidRateError()
+                raise InvalidRateError(text_new_rate)
             decimal_rate = Decimal(text_new_rate)
             if decimal_rate <= 0:
-                raise InvalidRateError()
+                raise InvalidRateError(decimal_rate)
             self._rate = decimal_rate.quantize(Decimal("1.000000"), rounding=ROUND_HALF_UP)
         except InvalidOperation:
-            raise InvalidRateError()
+            raise InvalidRateError(new_rate)
 
 
     def to_dict(self) -> dict:

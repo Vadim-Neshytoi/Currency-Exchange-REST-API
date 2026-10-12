@@ -42,13 +42,13 @@ class ExchangeResult:
         try:
             text_new_rate = str(new_rate)
             if text_new_rate.startswith('+'):
-                raise InvalidRateError()
+                raise InvalidRateError(text_new_rate)
             decimal_rate = Decimal(text_new_rate)
             if decimal_rate <= 0:
-                raise InvalidRateError()
+                raise InvalidRateError(decimal_rate)
             self._rate = decimal_rate.quantize(Decimal("1.000000"), rounding=ROUND_HALF_UP)
         except InvalidOperation:
-            raise InvalidRateError()
+            raise InvalidRateError(new_rate)
 
     @property
     def amount(self) -> Decimal:
@@ -64,12 +64,12 @@ class ExchangeResult:
         try:
             text_amount = str(amount)
             if text_amount.startswith("+"):
-                raise InvalidAmountError()
+                raise InvalidAmountError(text_amount)
             decimal_amount = Decimal(text_amount)
             if decimal_amount < 0:
-                raise InvalidAmountError()
+                raise InvalidAmountError(decimal_amount)
         except InvalidOperation:
-            raise InvalidAmountError()
+            raise InvalidAmountError(amount)
 
     @property
     def converted_amount(self) -> Decimal:

@@ -31,7 +31,7 @@ class Currency:
         if self._id is None:
             self._id = ID
         else:
-            raise ImmutableAttributeError()
+            raise ImmutableAttributeError(ID)
 
     @property
     def code(self) -> str:
@@ -39,7 +39,7 @@ class Currency:
 
     @code.setter
     def code(self, code: str) -> None:
-        normalized_code = self.normalized_code(code)
+        normalized_code = self.normalize_code(code)
         self._code = normalized_code
 
     @property
@@ -49,7 +49,7 @@ class Currency:
     @name.setter
     def name(self, name: str) -> None:
         if name.strip() == "":
-            raise InvalidNameError()
+            raise InvalidNameError(name)
         self._name = name
 
 
@@ -60,7 +60,7 @@ class Currency:
     @sign.setter
     def sign(self, sign: str) -> None:
         if sign.strip() == "" or len(sign) > 3:
-            raise InvalidSignError()
+            raise InvalidSignError(sign)
         self._sign = sign
 
 

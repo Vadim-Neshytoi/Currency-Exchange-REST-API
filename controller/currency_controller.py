@@ -18,7 +18,7 @@ class CurrencyController:
         code_to_find = Currency.normalize_code(code_to_find)
         currency = self._database_manager.find_currency_by_code(code_to_find)
         if currency is None:
-            raise CurrencyNotFoundError()
+            raise CurrencyNotFoundError(code_to_find)
         return currency
 
     def get_all_currencies(self) -> list[Currency]:
@@ -33,7 +33,7 @@ class CurrencyController:
         except sqlite3.IntegrityError as e:
             error_msg = str(e)
             if "UNIQUE constraint failed: currencies.code" in error_msg:
-                raise CurrencyAlreadyExistsError() from e
+                raise CurrencyAlreadyExistsError(code) from e
             raise
 
 
